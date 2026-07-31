@@ -1,5 +1,6 @@
 export type CellValue = string | number | boolean | Date | null;
 export type DataRow = Record<string, CellValue>;
+export type SourceModule = 'Utilizado' | 'Faturado';
 
 export interface DataModule {
   key: 'Utilizado' | 'Faturado' | 'Recebido';
@@ -9,6 +10,7 @@ export interface DataModule {
 }
 
 export interface ValidationReport {
+  module: SourceModule;
   fileName: string;
   sheetName: string;
   sheetNames: string[];
@@ -23,6 +25,8 @@ export interface ValidationReport {
   totalQuantity: number | null;
   zeroValues: number;
   negativeValues: number;
+  negativeTotal: number;
+  missingDates: number;
   duplicateGroups: number;
   distinct: {
     hospitals: number | null;
@@ -33,6 +37,8 @@ export interface ValidationReport {
     products: number | null;
     companies: number | null;
     productTopics: number | null;
+    productCodes: number | null;
+    patients: number | null;
   };
   errors: string[];
 }

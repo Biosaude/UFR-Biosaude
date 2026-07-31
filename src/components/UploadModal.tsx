@@ -17,8 +17,8 @@ export function UploadModal({ open, report, loading, error, onClose, onFile, onC
       <div className="validation-grid">
         <Validation label="Aba processada" value={report.sheetName} good/>
         <Validation label="Período" value={report.period ?? 'Informação não disponível na base de dados'}/>
-        <Validation label="Valor total" value={formatMoney(report.totalValue)}/>
-        <Validation label="Quantidade utilizada total" value={formatCount(report.totalQuantity)}/>
+        <Validation label={report.module === 'Faturado' ? 'Valor faturado total' : 'Valor utilizado total'} value={formatMoney(report.totalValue)}/>
+        {report.module === 'Utilizado' && <Validation label="Quantidade utilizada total" value={formatCount(report.totalQuantity)}/>}
         <Validation label="Empresas" value={formatCount(report.distinct.companies)}/>
         <Validation label="Hospitais" value={formatCount(report.distinct.hospitals)}/>
         <Validation label="Clientes" value={formatCount(report.distinct.clients)}/>
@@ -27,8 +27,12 @@ export function UploadModal({ open, report, loading, error, onClose, onFile, onC
         <Validation label="Marcas" value={formatCount(report.distinct.brands)}/>
         <Validation label="Produtos" value={formatCount(report.distinct.products)}/>
         <Validation label="Tópicos do produto" value={formatCount(report.distinct.productTopics)}/>
+        {report.module === 'Faturado' && <Validation label="Códigos de produto" value={formatCount(report.distinct.productCodes)}/>}
+        {report.module === 'Faturado' && <Validation label="Pacientes" value={formatCount(report.distinct.patients)}/>}
+        {report.module === 'Faturado' && <Validation label="Registros sem Data da Cirurgia" value={report.missingDates.toLocaleString('pt-BR')}/>}
         <Validation label="Valores zerados" value={report.zeroValues.toLocaleString('pt-BR')}/>
         <Validation label="Valores negativos" value={report.negativeValues.toLocaleString('pt-BR')}/>
+        {report.module === 'Faturado' && <Validation label="Total dos valores negativos" value={formatMoney(report.negativeTotal)}/>}
         <Validation label="Campos vazios" value={report.emptyCells.toLocaleString('pt-BR')}/>
         <Validation label="Duplicidades excedentes" value={report.duplicateRows.toLocaleString('pt-BR')}/>
         <Validation label="Grupos de duplicidade" value={report.duplicateGroups.toLocaleString('pt-BR')}/>

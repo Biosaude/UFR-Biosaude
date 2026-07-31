@@ -39,10 +39,19 @@ export function resolveUtilizadoColumns(columns: string[]): UtilizadoColumnMap {
 }
 
 export async function inspectWorkbook(file: File): Promise<{ rows: DataRow[]; report: ValidationReport }> {
-  const started = performance.now();
   const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+  const faturadoSheet = workbook.SheetNames.find((name) => normalize(name) === 'faturamento 01');
+  return faturadoSheet ? inspectSheet(file.name, workbook, faturadoSheet, 'Faturado') : inspectUtilizadoWorkbook(file.name, workbook);
+}
+
+function inspectUtilizadoWorkbook(fileName: string, workbook: XLSX.WorkBook): { rows: DataRow[]; report: ValidationReport } {
+  const started = performance.now();
   const sheetName = identifyUtilizadoSheet(workbook);
   if (!sheetName) throw new Error('Nenhuma aba contém as colunas mínimas do módulo Utilizado.');
+  return inspectSheet(fileName, workbook, sheetName, 'Utilizado', started);
+}
+
+function inspectSheet(fileName: string, workbook: XLSX.WorkBook, sheetName: string, module: 'Utilizado' | 'Faturado', started = performance.now()): { rows: DataRow[]; report: ValidationReport } {
 
   const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName], { defval: null, raw: true });
   const columns = raw.length ? Object.keys(raw[0]) : [];
@@ -66,23 +75,27 @@ export async function inspectWorkbook(file: File): Promise<{ rows: DataRow[]; re
   const errors: string[] = [];
   if (!rows.length) errors.push('A aba Utilizado não possui registros.');
   if (!columns.length) errors.push('Não foi possível identificar colunas na aba Utilizado.');
-  REQUIRED_COLUMNS.forEach((key) => { if (!mapped[key]) errors.push(`A coluna obrigatória “${UTILIZADO_COLUMNS[key]}” não foi encontrada.`); });
+  const required = module === 'Faturado' ? (['company', 'surgeryDate', 'productCode', 'brand', 'productTopic', 'product', 'totalValue', 'hospitalState', 'hospital', 'billingClient', 'clientState', 'doctor', 'mainRepresentative', 'patient'] as UtilizadoColumnKey[]) : REQUIRED_COLUMNS;
+  required.forEach((key) => { if (!mapped[key]) errors.push(`A coluna obrigatória “${UTILIZADO_COLUMNS[key]}” não foi encontrada.`); });
 
   return {
     rows,
     report: {
-      fileName: file.name, sheetName, sheetNames: workbook.SheetNames, rowCount: rows.length, columns,
+      module, fileName, sheetName, sheetNames: workbook.SheetNames, rowCount: rows.length, columns,
       emptyCells, duplicateRows, invalidDates, invalidValues,
       period: dates.length ? `${formatDate(dates[0])} a ${formatDate(dates.at(-1)!)}` : null,
       totalValue: monetaryValues.length ? monetaryValues.reduce((sum, value) => sum + value, 0) : null,
       totalQuantity: quantityValues.length ? quantityValues.reduce((sum, value) => sum + value, 0) : null,
       zeroValues: monetaryValues.filter((value) => value === 0).length,
       negativeValues: monetaryValues.filter((value) => value < 0).length,
+      negativeTotal: monetaryValues.filter((value) => value < 0).reduce((sum, value) => sum + value, 0),
+      missingDates: dateColumn ? rows.filter((row) => row[dateColumn] === null || row[dateColumn] === '').length : rows.length,
       duplicateGroups,
       distinct: {
         hospitals: distinct(mapped.hospital), clients: distinct(mapped.billingClient), doctors: distinct(mapped.doctor),
         representatives: distinct(mapped.mainRepresentative), brands: distinct(mapped.brand), products: distinct(mapped.product),
         companies: distinct(mapped.company), productTopics: distinct(mapped.productTopic),
+        productCodes: distinct(mapped.productCode), patients: distinct(mapped.patient),
       },
       errors,
       // retained through the caller to log actual processing, never used as business data
