@@ -15,18 +15,20 @@ export function UploadModal({ open, report, loading, error, onClose, onFile, onC
     {report && <>
       <div className="file-summary"><FileSpreadsheet/><div><strong>{report.fileName}</strong><span>{report.rowCount.toLocaleString('pt-BR')} registros • {report.columns.length} colunas</span></div><CheckCircle2 className="success"/></div>
       <div className="validation-grid">
-        <Validation label="Aba processada" value="Utilizado" good/>
+        <Validation label="Aba processada" value={report.sheetName} good/>
         <Validation label="Período" value={report.period ?? 'Informação não disponível na base de dados'}/>
         <Validation label="Valor total" value={formatMoney(report.totalValue)}/>
+        <Validation label="Quantidade utilizada total" value={formatCount(report.totalQuantity)}/>
+        <Validation label="Empresas" value={formatCount(report.distinct.companies)}/>
         <Validation label="Hospitais" value={formatCount(report.distinct.hospitals)}/>
         <Validation label="Clientes" value={formatCount(report.distinct.clients)}/>
         <Validation label="Médicos" value={formatCount(report.distinct.doctors)}/>
         <Validation label="Representantes" value={formatCount(report.distinct.representatives)}/>
         <Validation label="Marcas" value={formatCount(report.distinct.brands)}/>
         <Validation label="Produtos" value={formatCount(report.distinct.products)}/>
+        <Validation label="Tópicos do produto" value={formatCount(report.distinct.productTopics)}/>
         <Validation label="Valores zerados" value={report.zeroValues.toLocaleString('pt-BR')}/>
         <Validation label="Valores negativos" value={report.negativeValues.toLocaleString('pt-BR')}/>
-        <Validation label="Datas de faturamento ausentes" value={report.missingBillingDates.toLocaleString('pt-BR')}/>
         <Validation label="Campos vazios" value={report.emptyCells.toLocaleString('pt-BR')}/>
         <Validation label="Duplicidades excedentes" value={report.duplicateRows.toLocaleString('pt-BR')}/>
         <Validation label="Grupos de duplicidade" value={report.duplicateGroups.toLocaleString('pt-BR')}/>

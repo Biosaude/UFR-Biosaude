@@ -10,6 +10,7 @@ export interface DataModule {
 
 export interface ValidationReport {
   fileName: string;
+  sheetName: string;
   sheetNames: string[];
   rowCount: number;
   columns: string[];
@@ -19,9 +20,9 @@ export interface ValidationReport {
   invalidValues: number;
   period: string | null;
   totalValue: number | null;
+  totalQuantity: number | null;
   zeroValues: number;
   negativeValues: number;
-  missingBillingDates: number;
   duplicateGroups: number;
   distinct: {
     hospitals: number | null;
@@ -30,6 +31,8 @@ export interface ValidationReport {
     representatives: number | null;
     brands: number | null;
     products: number | null;
+    companies: number | null;
+    productTopics: number | null;
   };
   errors: string[];
 }

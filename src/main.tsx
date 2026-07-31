@@ -1,15 +1,16 @@
-import { StrictMode, useRef, useState } from 'react';
+import { StrictMode, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Clock3, Database, Eraser, RefreshCw, Upload } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import { EmptyState } from './components/EmptyState';
 import { UploadModal } from './components/UploadModal';
-import { inspectWorkbook } from './services/workbook';
+import { inspectWorkbook, UTILIZADO_SCHEMA_VERSION } from './services/workbook';
 import type { DataRow, ValidationReport } from './types';
 import './styles.css';
 
 export function App() {
   const [rows, setRows] = useState<DataRow[]>([]); const [columns, setColumns] = useState<string[]>([]); const [modal, setModal] = useState(false); const [loading, setLoading] = useState(false); const [error, setError] = useState<string|null>(null); const [pending, setPending] = useState<{rows:DataRow[];report:ValidationReport}|null>(null); const [updated, setUpdated] = useState<Date|null>(null); const [resetSignal, setResetSignal] = useState(0); const hiddenInput = useRef<HTMLInputElement>(null);
+  useEffect(() => { const key = 'ufr-utilizado-schema'; if (localStorage.getItem(key) !== UTILIZADO_SCHEMA_VERSION) { localStorage.removeItem('ufr-active-filters'); localStorage.setItem(key, UTILIZADO_SCHEMA_VERSION); setResetSignal((value) => value + 1); } }, []);
   const chooseFile = async (file: File) => { setError(null); setLoading(true); try { if (!file.name.toLowerCase().endsWith('.xlsx')) throw new Error('Formato inválido. Selecione exclusivamente um arquivo .xlsx.'); setPending(await inspectWorkbook(file)); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Não foi possível validar o arquivo.'); } finally { setLoading(false); } };
   const confirm = () => { if (!pending) return; setRows(pending.rows); setColumns(pending.report.columns); setUpdated(new Date()); setModal(false); setPending(null); };
   const openUpload = () => { setPending(null); setError(null); setModal(true); };

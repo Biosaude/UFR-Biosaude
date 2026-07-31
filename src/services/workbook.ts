@@ -2,26 +2,28 @@ import * as XLSX from 'xlsx';
 import type { DataRow, ValidationReport } from '../types';
 
 export const UTILIZADO_COLUMNS = {
+  company: 'Empresa',
   scheduleType: 'Tipo Agendamento',
   voucherType: 'Tipo do Vale',
   voucherStatus: 'Situação do Vale',
   surgeryDate: 'Data da Cirurgia',
   hospitalState: 'UF do Hospital',
   totalValue: 'Valor total',
+  usedQuantity: 'Quantidade Utilizada',
   hospital: 'Hospital',
   billingClient: 'Cliente de Faturamento',
   clientState: 'UF do Cliente',
-  clientCode: 'Código Cliente',
   doctor: 'Médico',
   mainRepresentative: 'Representante Principal',
   patient: 'Paciente',
-  surgeryType: 'Tipo da Cirurgia',
-  voucherBillingDate: 'Data Faturamento Vale',
   productCode: 'Código Produto',
   product: 'Produto',
   brand: 'Marca',
   productTopic: 'Tópico do Produto',
 } as const;
+
+export const UTILIZADO_SCHEMA_VERSION = 'utilizado-schema-v2';
+const REQUIRED_COLUMNS: UtilizadoColumnKey[] = ['surgeryDate', 'totalValue', 'usedQuantity', 'product', 'hospital', 'billingClient'];
 
 export type UtilizadoColumnKey = keyof typeof UTILIZADO_COLUMNS;
 export type UtilizadoColumnMap = Partial<Record<UtilizadoColumnKey, string>>;
@@ -39,8 +41,8 @@ export function resolveUtilizadoColumns(columns: string[]): UtilizadoColumnMap {
 export async function inspectWorkbook(file: File): Promise<{ rows: DataRow[]; report: ValidationReport }> {
   const started = performance.now();
   const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
-  const sheetName = workbook.SheetNames.find((name) => name.trim() === 'Utilizado');
-  if (!sheetName) throw new Error('A aba obrigatória “Utilizado” não foi encontrada.');
+  const sheetName = identifyUtilizadoSheet(workbook);
+  if (!sheetName) throw new Error('Nenhuma aba contém as colunas mínimas do módulo Utilizado.');
 
   const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName], { defval: null, raw: true });
   const columns = raw.length ? Object.keys(raw[0]) : [];
@@ -48,6 +50,7 @@ export async function inspectWorkbook(file: File): Promise<{ rows: DataRow[]; re
   const mapped = resolveUtilizadoColumns(columns);
   const dateColumn = mapped.surgeryDate;
   const valueColumn = mapped.totalValue;
+  const quantityColumn = mapped.usedQuantity;
   const emptyCells = rows.reduce((total, row) => total + columns.filter((column) => row[column] === null || row[column] === '').length, 0);
   const fingerprints = rows.map((row) => JSON.stringify(row));
   const fingerprintCounts = new Map<string, number>();
@@ -58,33 +61,48 @@ export async function inspectWorkbook(file: File): Promise<{ rows: DataRow[]; re
   const invalidValues = valueColumn ? rows.filter((row) => row[valueColumn] !== null && typeof toNumber(row[valueColumn]) !== 'number').length : 0;
   const dates = dateColumn ? rows.map((row) => toDate(row[dateColumn])).filter((date): date is Date => !!date).sort((a, b) => +a - +b) : [];
   const monetaryValues = valueColumn ? rows.map((row) => toNumber(row[valueColumn])).filter((value): value is number => value !== null) : [];
+  const quantityValues = quantityColumn ? rows.map((row) => toNumber(row[quantityColumn])).filter((value): value is number => value !== null) : [];
   const distinct = (column?: string) => column ? new Set(rows.map((row) => row[column]).filter((value) => value !== null && String(value).trim() !== '')).size : null;
   const errors: string[] = [];
   if (!rows.length) errors.push('A aba Utilizado não possui registros.');
   if (!columns.length) errors.push('Não foi possível identificar colunas na aba Utilizado.');
-  if (!dateColumn) errors.push('A coluna obrigatória “Data da Cirurgia” não foi encontrada.');
-  if (!valueColumn) errors.push('A coluna obrigatória “Valor total” não foi encontrada.');
+  REQUIRED_COLUMNS.forEach((key) => { if (!mapped[key]) errors.push(`A coluna obrigatória “${UTILIZADO_COLUMNS[key]}” não foi encontrada.`); });
 
   return {
     rows,
     report: {
-      fileName: file.name, sheetNames: workbook.SheetNames, rowCount: rows.length, columns,
+      fileName: file.name, sheetName, sheetNames: workbook.SheetNames, rowCount: rows.length, columns,
       emptyCells, duplicateRows, invalidDates, invalidValues,
       period: dates.length ? `${formatDate(dates[0])} a ${formatDate(dates.at(-1)!)}` : null,
       totalValue: monetaryValues.length ? monetaryValues.reduce((sum, value) => sum + value, 0) : null,
+      totalQuantity: quantityValues.length ? quantityValues.reduce((sum, value) => sum + value, 0) : null,
       zeroValues: monetaryValues.filter((value) => value === 0).length,
       negativeValues: monetaryValues.filter((value) => value < 0).length,
-      missingBillingDates: mapped.voucherBillingDate ? rows.filter((row) => row[mapped.voucherBillingDate!] === null || String(row[mapped.voucherBillingDate!]).trim() === '').length : 0,
       duplicateGroups,
       distinct: {
         hospitals: distinct(mapped.hospital), clients: distinct(mapped.billingClient), doctors: distinct(mapped.doctor),
         representatives: distinct(mapped.mainRepresentative), brands: distinct(mapped.brand), products: distinct(mapped.product),
+        companies: distinct(mapped.company), productTopics: distinct(mapped.productTopic),
       },
       errors,
       // retained through the caller to log actual processing, never used as business data
       ...({ processingMs: Math.round(performance.now() - started) } as object),
     },
   };
+}
+
+function identifyUtilizadoSheet(workbook: XLSX.WorkBook): string | null {
+  const exact = workbook.SheetNames.find((name) => normalize(name) === 'utilizado');
+  if (exact) return exact;
+  const containing = workbook.SheetNames.find((name) => normalize(name).includes('utilizado'));
+  if (containing) return containing;
+  const validSheets = workbook.SheetNames.filter((name) => {
+    const matrix = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[name], { header: 1, raw: true, blankrows: false });
+    const headers = (matrix[0] ?? []).map((value) => String(value ?? '')).filter(Boolean);
+    const mapped = resolveUtilizadoColumns(headers);
+    return REQUIRED_COLUMNS.every((key) => !!mapped[key]);
+  });
+  return validSheets.length ? validSheets[0] : null;
 }
 
 function validCell(value: unknown): DataRow[string] {
