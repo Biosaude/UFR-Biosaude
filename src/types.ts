@@ -18,6 +18,19 @@ export interface ValidationReport {
   invalidDates: number;
   invalidValues: number;
   period: string | null;
+  totalValue: number | null;
+  zeroValues: number;
+  negativeValues: number;
+  missingBillingDates: number;
+  duplicateGroups: number;
+  distinct: {
+    hospitals: number | null;
+    clients: number | null;
+    doctors: number | null;
+    representatives: number | null;
+    brands: number | null;
+    products: number | null;
+  };
   errors: string[];
 }
 

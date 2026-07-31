@@ -3,27 +3,25 @@ import { BarChart3, Building2, Check, ChevronDown, Download, Search, Stethoscope
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import * as XLSX from 'xlsx';
 import type { DataRow } from '../types';
-import { normalizeName, toDate, toNumber } from '../services/workbook';
+import { normalizeName, resolveUtilizadoColumns, toDate, toNumber, type UtilizadoColumnKey } from '../services/workbook';
 
 type SelectionState = Record<string, string[]>;
-type FilterDefinition = { key: string; label: string; aliases?: string[]; temporal?: 'year' | 'quarter' | 'month'; column?: string };
+type FilterDefinition = { key: string; label: string; source?: UtilizadoColumnKey; temporal?: 'year' | 'quarter' | 'month'; column?: string };
 
 const filterDefinitions: FilterDefinition[] = [
   { key: 'year', label: 'Ano', temporal: 'year' }, { key: 'quarter', label: 'Trimestre', temporal: 'quarter' }, { key: 'month', label: 'Mês', temporal: 'month' },
-  { key: 'gr', label: 'GR', aliases: ['gr', 'gerencia regional', 'gerência regional'] },
-  { key: 'hospitalState', label: 'UF Hospital', aliases: ['uf hospital', 'uf do hospital'] },
-  { key: 'clientState', label: 'UF Cliente', aliases: ['uf cliente', 'uf do cliente'] },
-  { key: 'brand', label: 'Marca', aliases: ['marca'] },
-  { key: 'topic', label: 'Tópico do Produto', aliases: ['topico produto', 'tópico produto', 'topico do produto', 'tópico do produto'] },
-  { key: 'client', label: 'Cliente', aliases: ['cliente'] }, { key: 'hospital', label: 'Hospital', aliases: ['hospital'] },
-  { key: 'doctor', label: 'Médico', aliases: ['medico', 'médico'] }, { key: 'representative', label: 'Representante', aliases: ['representante'] },
-  { key: 'product', label: 'Produto', aliases: ['produto'] },
-  { key: 'surgeryType', label: 'Tipo de Cirurgia', aliases: ['tipo cirurgia', 'tipo de cirurgia'] },
-  { key: 'scheduleType', label: 'Tipo de Agendamento', aliases: ['tipo agendamento', 'tipo de agendamento'] },
-  { key: 'voucherType', label: 'Tipo do Vale', aliases: ['tipo vale', 'tipo do vale'] },
-  { key: 'voucherStatus', label: 'Situação do Vale', aliases: ['situacao vale', 'situação vale', 'situacao do vale', 'situação do vale'] },
+  { key: 'hospitalState', label: 'UF Hospital', source: 'hospitalState' },
+  { key: 'clientState', label: 'UF Cliente', source: 'clientState' },
+  { key: 'brand', label: 'Marca', source: 'brand' },
+  { key: 'topic', label: 'Tópico do Produto', source: 'productTopic' },
+  { key: 'client', label: 'Cliente', source: 'billingClient' }, { key: 'hospital', label: 'Hospital', source: 'hospital' },
+  { key: 'doctor', label: 'Médico', source: 'doctor' }, { key: 'representative', label: 'Representante', source: 'mainRepresentative' },
+  { key: 'product', label: 'Produto', source: 'product' },
+  { key: 'scheduleType', label: 'Tipo de Agendamento', source: 'scheduleType' },
+  { key: 'voucherType', label: 'Tipo do Vale', source: 'voucherType' },
+  { key: 'voucherStatus', label: 'Situação do Vale', source: 'voucherStatus' },
+  { key: 'surgeryType', label: 'Tipo de Cirurgia', source: 'surgeryType' },
 ];
-const metricAliases: Record<string, string[]> = { value: ['valor utilizado', 'vl utilizado', 'utilizado', 'valor'], date: ['data utilizacao', 'data utilização', 'data'] };
 const colors = ['#1d527e', '#4d7899', '#7699af', '#98b1be', '#d59053', '#79a28c'];
 const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -32,10 +30,10 @@ export function Dashboard({ rows, columns, resetSignal }: { rows: DataRow[]; col
   const [showMore, setShowMore] = useState(false);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
-  const findColumn = (aliases: string[]) => columns.find((column) => aliases.some((alias) => normalizeName(column) === normalizeName(alias)));
-  const dateCol = findColumn(metricAliases.date);
-  const valueCol = findColumn(metricAliases.value);
-  const filters = useMemo(() => filterDefinitions.map((definition) => ({ ...definition, column: definition.temporal ? dateCol : findColumn(definition.aliases ?? []) })).filter((definition) => !!definition.column), [columns, dateCol]); // eslint-disable-line react-hooks/exhaustive-deps
+  const columnMap = useMemo(() => resolveUtilizadoColumns(columns), [columns]);
+  const dateCol = columnMap.surgeryDate;
+  const valueCol = columnMap.totalValue;
+  const filters = useMemo(() => filterDefinitions.map((definition) => ({ ...definition, column: definition.temporal ? dateCol : definition.source ? columnMap[definition.source] : undefined })).filter((definition) => !!definition.column), [columnMap, dateCol]);
 
   useEffect(() => { setSelections({}); setQuery(''); setPage(1); }, [rows, resetSignal]);
 
@@ -52,7 +50,8 @@ export function Dashboard({ rows, columns, resetSignal }: { rows: DataRow[]; col
   const metrics = useMemo(() => {
     const distinct = (key: string) => { const column = filters.find((filter) => filter.key === key)?.column; return column ? new Set(filteredRows.map((row) => row[column!]).filter(hasValue)).size : null; };
     const values = valueCol ? filteredRows.map((row) => toNumber(row[valueCol])).filter((value): value is number => value !== null) : [];
-    return { total: values.length ? values.reduce((sum, value) => sum + value, 0) : null, average: values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null, client: distinct('client'), hospital: distinct('hospital'), doctor: distinct('doctor'), representative: distinct('representative'), brand: distinct('brand') };
+    const total = values.length ? values.reduce((sum, value) => sum + value, 0) : null;
+    return { total, average: total !== null && filteredRows.length ? total / filteredRows.length : null, client: distinct('client'), hospital: distinct('hospital'), doctor: distinct('doctor'), representative: distinct('representative'), brand: distinct('brand') };
   }, [filteredRows, filters, valueCol]);
   const timeline = useMemo(() => aggregateTimeline(filteredRows, dateCol, valueCol), [filteredRows, dateCol, valueCol]);
   const participation = useMemo(() => aggregate(filteredRows, filters.find((filter) => filter.key === 'brand')?.column, valueCol).slice(0, 6), [filteredRows, filters, valueCol]);
@@ -72,7 +71,7 @@ export function Dashboard({ rows, columns, resetSignal }: { rows: DataRow[]; col
     </div>
     {!filteredRows.length && <div className="no-results">Nenhum resultado para a seleção atual <button onClick={() => setSelections({})}>Limpar filtros</button></div>}
     <section className="kpi-grid">
-      <Kpi icon={<WalletCards/>} label="Valor utilizado" value={money(metrics.total)}/><Kpi icon={<BarChart3/>} label="Registros" value={filteredRows.length.toLocaleString('pt-BR')}/><Kpi icon={<UsersRound/>} label="Clientes" value={show(metrics.client)}/><Kpi icon={<Building2/>} label="Hospitais" value={show(metrics.hospital)}/><Kpi icon={<Stethoscope/>} label="Médicos" value={show(metrics.doctor)}/><Kpi icon={<UserRound/>} label="Representantes" value={show(metrics.representative)}/><Kpi icon={<Tags/>} label="Marcas" value={show(metrics.brand)}/><Kpi icon={<WalletCards/>} label="Valor médio" value={money(metrics.average)}/>
+      <Kpi icon={<WalletCards/>} label="Valor utilizado" value={money(metrics.total)} tooltip={money(metrics.total)}/><Kpi icon={<BarChart3/>} label="Registros" value={filteredRows.length.toLocaleString('pt-BR')}/><Kpi icon={<UsersRound/>} label="Clientes" value={show(metrics.client)}/><Kpi icon={<Building2/>} label="Hospitais" value={show(metrics.hospital)}/><Kpi icon={<Stethoscope/>} label="Médicos" value={show(metrics.doctor)}/><Kpi icon={<UserRound/>} label="Representantes" value={show(metrics.representative)}/><Kpi icon={<Tags/>} label="Marcas" value={show(metrics.brand)}/><Kpi icon={<WalletCards/>} label="Valor médio" value={money(metrics.average)} tooltip={`Valor médio por registro: ${money(metrics.average)}`}/>
     </section>
     <section className="visual-grid">
       <article className="panel timeline"><PanelTitle eyebrow="EVOLUÇÃO TEMPORAL" title="Utilizado ao longo do tempo" action="Mensal"/>{timeline.length ? <ResponsiveContainer width="100%" height={250}><BarChart data={timeline} onClick={(event) => event?.activePayload?.[0] && addVisualFilter('month', event.activePayload[0].payload.month)}><CartesianGrid vertical={false} stroke="#e8edf0"/><XAxis dataKey="name" axisLine={false} tickLine={false}/><YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `${value / 1000}k`}/><Tooltip formatter={(value) => money(Number(value))}/><Bar dataKey="value" fill="#1d527e" radius={[5, 5, 0, 0]}/></BarChart></ResponsiveContainer> : <Unavailable/>}</article>
@@ -107,6 +106,6 @@ function aggregate(rows: DataRow[], dimension?: string, valueCol?: string) { if 
 function hasValue(value: DataRow[string] | undefined): value is string | number | boolean | Date { return value !== null && value !== undefined && String(value).trim() !== ''; }
 function show(value: number | null) { return value === null ? 'Informação não disponível na base de dados' : value.toLocaleString('pt-BR'); }
 function display(value: DataRow[string]) { if (value === null) return <span className="empty-cell">Não disponível</span>; if (value instanceof Date) return new Intl.DateTimeFormat('pt-BR').format(value); return String(value); }
-function Kpi({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) { return <article className="kpi"><div className="kpi-icon">{icon}</div><span>{label}</span><strong className={value.startsWith('Informação') ? 'unavailable-value' : ''}>{value}</strong><small>Fonte: base Utilizado</small></article>; }
+function Kpi({ icon, label, value, tooltip }: { icon: React.ReactNode; label: string; value: string; tooltip?: string }) { return <article className="kpi" title={tooltip}><div className="kpi-icon">{icon}</div><span>{label}</span><strong className={value.startsWith('Informação') ? 'unavailable-value' : ''}>{value}</strong><small>Fonte: base Utilizado</small></article>; }
 function PanelTitle({ eyebrow, title, action }: { eyebrow: string; title: string; action?: string }) { return <div className="panel-title"><div><span>{eyebrow}</span><h3>{title}</h3></div>{action && <button>{action}<ChevronDown size={14}/></button>}</div>; }
 function Unavailable() { return <div className="unavailable">Informação não disponível na base de dados</div>; }
