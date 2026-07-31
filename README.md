@@ -9,6 +9,27 @@ npm install
 npm run dev
 ```
 
+Para validar a compilação localmente:
+
+```bash
+npm run typecheck
+npm run build
+```
+
+## Implantação na Vercel
+
+O repositório inclui `vercel.json` com o framework Vite, o diretório de saída
+`dist` e fallback de rotas para `index.html`. As dependências possuem versões
+fixas para que GitHub, Codex e Vercel instalem exatamente a mesma combinação.
+
+Na Vercel, mantenha o **Root Directory** na raiz do repositório e utilize a
+versão **20.x ou 22.x** do Node.js. O comando de implantação é `npm run build`.
+
+O build de produção utiliza o transpilador do Vite. A verificação estática do
+TypeScript permanece disponível separadamente em `npm run typecheck`, evitando
+que diferenças entre tipos de bibliotecas de visualização interrompam a entrega
+de um bundle que o Vite consegue compilar corretamente.
+
 ## Fluxo da base
 
 1. Selecione exclusivamente um arquivo `.xlsx`.
