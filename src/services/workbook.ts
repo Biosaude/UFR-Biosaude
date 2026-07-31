@@ -38,10 +38,16 @@ export function resolveUtilizadoColumns(columns: string[]): UtilizadoColumnMap {
   })) as UtilizadoColumnMap;
 }
 
-export async function inspectWorkbook(file: File): Promise<{ rows: DataRow[]; report: ValidationReport }> {
-  const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
-  const faturadoSheet = workbook.SheetNames.find((name) => normalize(name) === 'faturamento 01');
-  return faturadoSheet ? inspectSheet(file.name, workbook, faturadoSheet, 'Faturado') : inspectUtilizadoWorkbook(file.name, workbook);
+export async function inspectWorkbook(file: File, targetModule: 'Utilizado' | 'Faturado'): Promise<{ rows: DataRow[]; report: ValidationReport }> {
+  let workbook: XLSX.WorkBook;
+  try { workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true }); }
+  catch { throw new Error('O arquivo não pôde ser lido. A base existente foi preservada; nenhuma alteração foi realizada.'); }
+  if (targetModule === 'Faturado') {
+    const sheetName = workbook.SheetNames.find((name) => ['faturamento 01', 'faturamento'].includes(normalize(name)));
+    if (!sheetName) throw new Error(`Nenhuma aba de Faturamento foi encontrada. Abas localizadas: ${workbook.SheetNames.join(', ') || 'nenhuma'}. A base existente foi preservada; nenhuma alteração foi realizada.`);
+    return inspectSheet(file.name, workbook, sheetName, 'Faturado');
+  }
+  return inspectUtilizadoWorkbook(file.name, workbook);
 }
 
 function inspectUtilizadoWorkbook(fileName: string, workbook: XLSX.WorkBook): { rows: DataRow[]; report: ValidationReport } {
