@@ -22,11 +22,22 @@ export const UTILIZADO_COLUMNS = {
   productTopic: 'Tópico do Produto',
 } as const;
 
+export const RECEBIDO_COLUMNS = {
+  company: 'Empresa', client: 'Nome cliente', hospital: 'Nome hospital', doctor: 'Nome do medico', representative: 'Nome representante', patient: 'Paciente',
+  receiptDate: 'Dt.recebimento', receivedValue: 'Vr.recebido', openValue: 'Vr.aberto', discountValue: 'Vr.desconto', interestValue: 'Vr.juros',
+  bank: 'Banco', collectionLocation: 'Local cobranca', cashDesk: 'Caixa', code: 'Codigo', invoice: 'Duplicata', installment: 'Parcela',
+  issueDate: 'Dt.emissao', inclusionDate: 'Dt.inclusao', dueDate: 'Dt.vencimento', surgeryDate: 'Dt.cirurgia', creditDate: 'Dt.credito',
+  invoiceValue: 'Vr.duplicata', representativeCode1: 'Cod.representante 1', representativeCode2: 'Cod.representante 2', hospitalCnpj: 'CNPJ do hospital',
+  bankSlip: 'Nr.boleto', fullTitleNumber: 'Numero do titulo completo',
+} as const;
+
 export const UTILIZADO_SCHEMA_VERSION = 'utilizado-schema-v2';
 const REQUIRED_COLUMNS: UtilizadoColumnKey[] = ['surgeryDate', 'totalValue', 'usedQuantity', 'product', 'hospital', 'billingClient'];
 
 export type UtilizadoColumnKey = keyof typeof UTILIZADO_COLUMNS;
 export type UtilizadoColumnMap = Partial<Record<UtilizadoColumnKey, string>>;
+export type RecebidoColumnKey = keyof typeof RECEBIDO_COLUMNS;
+export type RecebidoColumnMap = Partial<Record<RecebidoColumnKey, string>>;
 
 const normalize = (value: string) => String(value).trim().replace(/\s+/g, ' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -38,7 +49,15 @@ export function resolveUtilizadoColumns(columns: string[]): UtilizadoColumnMap {
   })) as UtilizadoColumnMap;
 }
 
-export async function inspectWorkbook(file: File, targetModule: 'Utilizado' | 'Faturado'): Promise<{ rows: DataRow[]; report: ValidationReport }> {
+export function resolveRecebidoColumns(columns: string[]): RecebidoColumnMap {
+  const available = columns.map((column, index) => ({ original: column, normalized: normalize(column.replace(/_\d+$/, '')), index }));
+  return Object.fromEntries(Object.entries(RECEBIDO_COLUMNS).flatMap(([key, expected]) => {
+    const match = available.find((column) => column.normalized === normalize(expected));
+    return match ? [[key, match.original]] : [];
+  })) as RecebidoColumnMap;
+}
+
+export async function inspectWorkbook(file: File, targetModule: 'Utilizado' | 'Faturado' | 'Recebido'): Promise<{ rows: DataRow[]; report: ValidationReport }> {
   let workbook: XLSX.WorkBook;
   try { workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true }); }
   catch { throw new Error('O arquivo não pôde ser lido. A base existente foi preservada; nenhuma alteração foi realizada.'); }
@@ -47,8 +66,39 @@ export async function inspectWorkbook(file: File, targetModule: 'Utilizado' | 'F
     if (!sheetName) throw new Error(`Nenhuma aba de Faturamento foi encontrada. Abas localizadas: ${workbook.SheetNames.join(', ') || 'nenhuma'}. A base existente foi preservada; nenhuma alteração foi realizada.`);
     return inspectSheet(file.name, workbook, sheetName, 'Faturado');
   }
+  if (targetModule === 'Recebido') {
+    const sheetName = workbook.SheetNames.find((name) => normalize(name) === 'planilha1');
+    if (!sheetName) throw new Error(`A aba Planilha1 não foi encontrada. Abas localizadas: ${workbook.SheetNames.join(', ') || 'nenhuma'}. A base existente foi preservada; nenhuma alteração foi realizada.`);
+    return inspectRecebidoSheet(file.name, workbook, sheetName);
+  }
   return inspectUtilizadoWorkbook(file.name, workbook);
 }
+
+function inspectRecebidoSheet(fileName: string, workbook: XLSX.WorkBook, sheetName: string): { rows: DataRow[]; report: ValidationReport } {
+  const started = performance.now();
+  const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName], { defval: null, raw: true });
+  const columns = raw.length ? Object.keys(raw[0]) : [];
+  const rows = raw.map((row) => Object.fromEntries(columns.map((column) => [column, validCell(row[column])]))) as DataRow[];
+  const mapped = resolveRecebidoColumns(columns);
+  const required = Object.keys(RECEBIDO_COLUMNS) as RecebidoColumnKey[];
+  const errors = required.flatMap((key) => mapped[key] ? [] : [`A coluna obrigatória “${RECEBIDO_COLUMNS[key]}” não foi encontrada.`]);
+  const values = (key: RecebidoColumnKey) => mapped[key] ? rows.map((row) => toNumber(row[mapped[key]!])).filter((value): value is number => value !== null) : [];
+  const dates = mapped.receiptDate ? rows.map((row) => toDate(row[mapped.receiptDate!])).filter((date): date is Date => !!date).sort((a, b) => +a - +b) : [];
+  const received = values('receivedValue'); const fingerprintCounts = new Map<string, number>(); rows.forEach((row) => { const value = JSON.stringify(row); fingerprintCounts.set(value, (fingerprintCounts.get(value) ?? 0) + 1); });
+  const distinct = (column?: string) => column ? new Set(rows.map((row) => row[column]).filter((value) => value !== null && String(value).trim() !== '')).size : null;
+  return { rows, report: { module: 'Recebido', fileName, sheetName, sheetNames: workbook.SheetNames, rowCount: rows.length, columns,
+    emptyCells: rows.reduce((total, row) => total + columns.filter((column) => row[column] === null || row[column] === '').length, 0), duplicateRows: rows.length - fingerprintCounts.size,
+    duplicateGroups: [...fingerprintCounts.values()].filter((count) => count > 1).length, invalidDates: mapped.receiptDate ? rows.filter((row) => row[mapped.receiptDate!] !== null && !toDate(row[mapped.receiptDate!])).length : 0,
+    invalidValues: mapped.receivedValue ? rows.filter((row) => row[mapped.receivedValue!] !== null && toNumber(row[mapped.receivedValue!]) === null).length : 0,
+    period: dates.length ? `${formatDate(dates[0])} a ${formatDate(dates.at(-1)!)}` : null, totalValue: received.length ? received.reduce((sum, value) => sum + value, 0) : null, totalQuantity: null,
+    totalOpen: sumValues(values('openValue')), totalDiscount: sumValues(values('discountValue')), totalInterest: sumValues(values('interestValue')),
+    zeroValues: received.filter((value) => value === 0).length, negativeValues: received.filter((value) => value < 0).length, negativeTotal: received.filter((value) => value < 0).reduce((sum, value) => sum + value, 0), missingDates: mapped.receiptDate ? rows.filter((row) => row[mapped.receiptDate!] === null || row[mapped.receiptDate!] === '').length : rows.length,
+    distinct: { hospitals: distinct(mapped.hospital), clients: distinct(mapped.client), doctors: distinct(mapped.doctor), representatives: distinct(mapped.representative), brands: null, products: null, companies: distinct(mapped.company), productTopics: null, productCodes: null, patients: distinct(mapped.patient) }, errors,
+    ...({ processingMs: Math.round(performance.now() - started) } as object),
+  }};
+}
+
+const sumValues = (values: number[]) => values.length ? values.reduce((sum, value) => sum + value, 0) : null;
 
 function inspectUtilizadoWorkbook(fileName: string, workbook: XLSX.WorkBook): { rows: DataRow[]; report: ValidationReport } {
   const started = performance.now();
@@ -92,6 +142,7 @@ function inspectSheet(fileName: string, workbook: XLSX.WorkBook, sheetName: stri
       period: dates.length ? `${formatDate(dates[0])} a ${formatDate(dates.at(-1)!)}` : null,
       totalValue: monetaryValues.length ? monetaryValues.reduce((sum, value) => sum + value, 0) : null,
       totalQuantity: quantityValues.length ? quantityValues.reduce((sum, value) => sum + value, 0) : null,
+      totalOpen: null, totalDiscount: null, totalInterest: null,
       zeroValues: monetaryValues.filter((value) => value === 0).length,
       negativeValues: monetaryValues.filter((value) => value < 0).length,
       negativeTotal: monetaryValues.filter((value) => value < 0).reduce((sum, value) => sum + value, 0),

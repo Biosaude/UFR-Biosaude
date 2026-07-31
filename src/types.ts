@@ -1,6 +1,6 @@
 export type CellValue = string | number | boolean | Date | null;
 export type DataRow = Record<string, CellValue>;
-export type SourceModule = 'Utilizado' | 'Faturado';
+export type SourceModule = 'Utilizado' | 'Faturado' | 'Recebido';
 
 export interface DataModule {
   key: 'Utilizado' | 'Faturado' | 'Recebido';
@@ -23,6 +23,9 @@ export interface ValidationReport {
   period: string | null;
   totalValue: number | null;
   totalQuantity: number | null;
+  totalOpen: number | null;
+  totalDiscount: number | null;
+  totalInterest: number | null;
   zeroValues: number;
   negativeValues: number;
   negativeTotal: number;

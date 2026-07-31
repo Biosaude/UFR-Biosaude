@@ -7,7 +7,7 @@ export function UploadModal({ open, targetModule, report, loading, error, onClos
   if (!open) return null;
   return <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal">
     <div className="modal-header"><div><p className="eyebrow">ATUALIZAÇÃO SEGURA</p><h2>Atualizar base de dados</h2></div><button className="icon-button" onClick={onClose} aria-label="Fechar"><X/></button></div>
-    {!targetModule && <div className="module-picker"><p>Qual base deseja atualizar?</p><div><button onClick={() => onSelectModule('Utilizado')}><FileSpreadsheet/><strong>Utilizado</strong><span>Disponível para atualização</span></button><button onClick={() => onSelectModule('Faturado')}><FileSpreadsheet/><strong>Faturado</strong><span>Primeira importação ou atualização</span></button><button disabled><FileSpreadsheet/><strong>Recebido</strong><span>Aguardando definição da estrutura</span></button></div></div>}
+    {!targetModule && <div className="module-picker"><p>Qual base deseja atualizar?</p><div><button onClick={() => onSelectModule('Utilizado')}><FileSpreadsheet/><strong>Utilizado</strong><span>Disponível para atualização</span></button><button onClick={() => onSelectModule('Faturado')}><FileSpreadsheet/><strong>Faturado</strong><span>Primeira importação ou atualização</span></button><button onClick={() => onSelectModule('Recebido')}><FileSpreadsheet/><strong>Recebido</strong><span>Primeira importação ou atualização</span></button></div></div>}
     {targetModule && !report && <label className="drop-zone">
       {loading ? <><LoaderCircle className="spin"/><strong>Validando arquivo…</strong></> : <><FileSpreadsheet/><strong>Selecione a planilha .xlsx</strong><span>A base só será aplicada após sua confirmação.</span></>}
       <input type="file" accept=".xlsx" disabled={loading} onChange={(event) => { const file = event.target.files?.[0]; if (file) onFile(file); event.target.value = ''; }}/>
@@ -18,22 +18,25 @@ export function UploadModal({ open, targetModule, report, loading, error, onClos
       <div className="validation-grid">
         <Validation label="Aba processada" value={report.sheetName} good/>
         <Validation label="Período" value={report.period ?? 'Informação não disponível na base de dados'}/>
-        <Validation label={report.module === 'Faturado' ? 'Valor faturado total' : 'Valor utilizado total'} value={formatMoney(report.totalValue)}/>
+        <Validation label={report.module === 'Faturado' ? 'Valor faturado total' : report.module === 'Recebido' ? 'Valor recebido total' : 'Valor utilizado total'} value={formatMoney(report.totalValue)}/>
         {report.module === 'Utilizado' && <Validation label="Quantidade utilizada total" value={formatCount(report.totalQuantity)}/>}
         <Validation label="Empresas" value={formatCount(report.distinct.companies)}/>
         <Validation label="Hospitais" value={formatCount(report.distinct.hospitals)}/>
         <Validation label="Clientes" value={formatCount(report.distinct.clients)}/>
         <Validation label="Médicos" value={formatCount(report.distinct.doctors)}/>
         <Validation label="Representantes" value={formatCount(report.distinct.representatives)}/>
-        <Validation label="Marcas" value={formatCount(report.distinct.brands)}/>
-        <Validation label="Produtos" value={formatCount(report.distinct.products)}/>
-        <Validation label="Tópicos do produto" value={formatCount(report.distinct.productTopics)}/>
+        {report.module !== 'Recebido' && <Validation label="Marcas" value={formatCount(report.distinct.brands)}/>}
+        {report.module !== 'Recebido' && <Validation label="Produtos" value={formatCount(report.distinct.products)}/>}
+        {report.module !== 'Recebido' && <Validation label="Tópicos do produto" value={formatCount(report.distinct.productTopics)}/>}
         {report.module === 'Faturado' && <Validation label="Códigos de produto" value={formatCount(report.distinct.productCodes)}/>}
         {report.module === 'Faturado' && <Validation label="Pacientes" value={formatCount(report.distinct.patients)}/>}
         {report.module === 'Faturado' && <Validation label="Registros sem Data da Cirurgia" value={report.missingDates.toLocaleString('pt-BR')}/>}
         <Validation label="Valores zerados" value={report.zeroValues.toLocaleString('pt-BR')}/>
         <Validation label="Valores negativos" value={report.negativeValues.toLocaleString('pt-BR')}/>
         {report.module === 'Faturado' && <Validation label="Total dos valores negativos" value={formatMoney(report.negativeTotal)}/>}
+        {report.module === 'Recebido' && <Validation label="Valor em aberto" value={formatMoney(report.totalOpen)}/>}
+        {report.module === 'Recebido' && <Validation label="Total de descontos" value={formatMoney(report.totalDiscount)}/>}
+        {report.module === 'Recebido' && <Validation label="Total de juros" value={formatMoney(report.totalInterest)}/>}
         <Validation label="Campos vazios" value={report.emptyCells.toLocaleString('pt-BR')}/>
         <Validation label="Duplicidades excedentes" value={report.duplicateRows.toLocaleString('pt-BR')}/>
         <Validation label="Grupos de duplicidade" value={report.duplicateGroups.toLocaleString('pt-BR')}/>
