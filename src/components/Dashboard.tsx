@@ -41,7 +41,7 @@ const filterGroups = [
   { label: 'Processo', keys: ['voucherType', 'voucherStatus', 'scheduleType'] },
 ];
 
-export function Dashboard({ rows, columns, resetSignal, module }: { rows: DataRow[]; columns: string[]; resetSignal: number; module: ModuleName }) {
+export function Dashboard({ rows, columns, resetSignal, module, sharedFilters = {}, onSharedFiltersChange }: { rows: DataRow[]; columns: string[]; resetSignal: number; module: ModuleName; sharedFilters?: SelectionState; onSharedFiltersChange?: (filters: SelectionState) => void }) {
   const [selections, setSelections] = useState<SelectionState>({});
   const [showMore, setShowMore] = useState(false);
   const [query, setQuery] = useState('');
@@ -62,7 +62,7 @@ export function Dashboard({ rows, columns, resetSignal, module }: { rows: DataRo
   const quantityCol = columnMap.usedQuantity;
   const filters = useMemo(() => filterDefinitions.filter((definition) => !definition.modules || definition.modules.includes(module)).map((definition) => ({ ...definition, column: definition.temporal ? dateCol : definition.source ? columnMap[definition.source] : undefined })).filter((definition) => !!definition.column), [columnMap, dateCol, module]);
 
-  useEffect(() => { setSelections({}); setQuantityRange({ min: '', max: '' }); setQuery(''); setPage(1); }, [rows, resetSignal]);
+  useEffect(() => { setSelections(sharedFilters); setQuantityRange({ min: '', max: '' }); setQuery(''); setPage(1); }, [rows, resetSignal, sharedFilters]);
 
   const matches = (row: DataRow, ignoredKey?: string) => filters.every((filter) => {
     if (filter.key === ignoredKey || !selections[filter.key]?.length) return true;
@@ -71,7 +71,7 @@ export function Dashboard({ rows, columns, resetSignal, module }: { rows: DataRo
   }) && matchesQuantity(row, quantityCol, quantityRange);
   const filteredRows = useMemo(() => rows.filter((row) => matches(row)), [rows, filters, selections]); // eslint-disable-line react-hooks/exhaustive-deps
   const optionsFor = (filter: FilterDefinition) => uniqueOptions(rows.filter((row) => matches(row, filter.key)), filter, dateCol);
-  const setFilter = (key: string, values: string[]) => { setSelections((current) => ({ ...current, [key]: values })); setPage(1); };
+  const setFilter = (key: string, values: string[]) => { setSelections((current) => { const next = { ...current, [key]: values }; onSharedFiltersChange?.(next); return next; }); setPage(1); };
   const addVisualFilter = (key: string, value: string) => setFilter(key, [value]);
 
   const metrics = useMemo(() => {

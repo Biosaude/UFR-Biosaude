@@ -45,4 +45,15 @@ Toda visualização é calculada no navegador a partir da planilha importada. In
 - `src/components`: interface, visualizações, importação e estados sem dados.
 - `src/types.ts`: contratos compartilhados dos módulos e registros.
 
-O processamento local evita o envio da planilha a serviços externos e mantém a camada de importação separada da apresentação.
+O processamento e a validação ocorrem no navegador; somente após a confirmação administrativa a versão validada é enviada ao armazenamento corporativo configurado.
+
+## Persistência corporativa
+
+Em produção, configure no projeto Vercel:
+
+- `BLOB_READ_WRITE_TOKEN`: token de um Vercel Blob Store usado para armazenar a versão atual, versões anteriores e auditorias de cada módulo.
+- `UFR_ADMIN_TOKEN`: segredo exigido pelo endpoint de atualização, restauração e exclusão de bases.
+
+A consulta das versões atuais é pública para os usuários do dashboard. Operações de escrita exigem o token administrativo, solicitado somente durante a confirmação do upload e mantido apenas na sessão do administrador. Cada atualização grava uma versão imutável, um manifesto atual e um registro de auditoria com usuário, arquivo, módulo, quantidade de registros, hash e horário.
+
+Sem `BLOB_READ_WRITE_TOKEN`, a API usa memória apenas para desenvolvimento local; esse fallback não deve ser utilizado em produção.
