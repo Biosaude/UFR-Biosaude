@@ -7,7 +7,7 @@ import type { DataRow, SourceModule, ValidationReport } from '../types';
 import { resolveModuleFields } from '../services/moduleConfig';
 import { normalizeName, toDate, toNumber } from '../services/workbook';
 
-export interface OverviewModuleData { rows: DataRow[]; columns: string[]; updated: Date; report: ValidationReport; updatedBy?: string; version?: string; fileHash?: string }
+export interface OverviewModuleData { rows: DataRow[]; columns: string[]; updated: Date; report: ValidationReport }
 type ModuleStore = Partial<Record<SourceModule, OverviewModuleData>>;
 const modules: SourceModule[] = ['Utilizado', 'Faturado', 'Recebido'];
 const colors: Record<SourceModule, string> = { Utilizado: '#1d527e', Faturado: '#d28b4d', Recebido: '#6f9b80' };
@@ -68,7 +68,7 @@ export function ExecutiveOverview({ data, onOpenModule, onFiltersChange, resetSi
   </main>;
 }
 
-function prepareModule(module: SourceModule, data?: OverviewModuleData) { const fields = data ? resolveModuleFields(module, data.columns) : {}; const dates = data && fields.date ? data.rows.map((row) => toDate(row[fields.date!])).filter((date): date is Date => !!date) : []; return { module, loaded: !!data, rows: data?.rows ?? [], fields, dates, total: null as number | null, filteredCount: data?.rows.length ?? null, period: data?.report.period ?? null, updated: data?.updated, updatedBy: data?.updatedBy, version: data?.version, report: data?.report, missingDates: data?.report.missingDates ?? null }; }
+function prepareModule(module: SourceModule, data?: OverviewModuleData) { const fields = data ? resolveModuleFields(module, data.columns) : {}; const dates = data && fields.date ? data.rows.map((row) => toDate(row[fields.date!])).filter((date): date is Date => !!date) : []; return { module, loaded: !!data, rows: data?.rows ?? [], fields, dates, total: null as number | null, filteredCount: data?.rows.length ?? null, period: data?.report.period ?? null, updated: data?.updated, report: data?.report, missingDates: data?.report.missingDates ?? null }; }
 function calculate(source: ReturnType<typeof prepareModule>, rows: DataRow[]) { const values = source.fields.value ? rows.map((row) => toNumber(row[source.fields.value!])).filter((value): value is number => value !== null) : []; return { ...source, rows, total: values.length ? values.reduce((sum, value) => sum + value, 0) : null, filteredCount: rows.length }; }
 function commonRange(items: ReturnType<typeof prepareModule>[]) { const ranged = items.filter((item) => item.dates.length); if (ranged.length < 2) return null; const start = new Date(Math.max(...ranged.map((item) => +new Date(Math.min(...item.dates.map(Number)))))); const end = new Date(Math.min(...ranged.map((item) => +new Date(Math.max(...item.dates.map(Number)))))); return start <= end ? { start, end } : null; }
 function dimensionOptions(items: ReturnType<typeof prepareModule>[]) {
