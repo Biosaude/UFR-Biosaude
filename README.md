@@ -45,15 +45,13 @@ Toda visualização é calculada no navegador a partir da planilha importada. In
 - `src/components`: interface, visualizações, importação e estados sem dados.
 - `src/types.ts`: contratos compartilhados dos módulos e registros.
 
-O processamento e a validação ocorrem no navegador; somente após a confirmação administrativa a versão validada é enviada ao armazenamento corporativo configurado.
+O processamento e a validação ocorrem no navegador; somente após a confirmação da atualização a versão validada é enviada ao armazenamento configurado.
 
 ## Persistência corporativa
 
 Em produção, configure no projeto Vercel:
 
 - `BLOB_READ_WRITE_TOKEN`: token de um Vercel Blob Store usado para armazenar a versão atual, versões anteriores e auditorias de cada módulo.
-- `UFR_ADMIN_TOKEN`: reservado para a futura autenticação de produção. A validação está temporariamente desabilitada por `AUTH_ENABLED = false` durante o desenvolvimento.
-
-A consulta das versões atuais e o fluxo de atualização estão temporariamente liberados durante o desenvolvimento, sem prompts ou tokens. Cada atualização continua gravando uma versão imutável, um manifesto atual e um registro de auditoria com arquivo, módulo, quantidade de registros, hash e horário. Antes da produção, altere `AUTH_ENABLED` e substitua esta chave por login, sessão e perfis reais.
+A consulta das versões atuais e o fluxo de atualização estão liberados sem identificação ou código de acesso. Cada atualização continua gravando uma versão imutável, um manifesto atual e um registro de auditoria com arquivo, módulo, quantidade de registros, hash e horário. A chave central `AUTH_ENABLED = false` permanece reservada para uma implementação futura, sem interferir no fluxo atual.
 
 Sem `BLOB_READ_WRITE_TOKEN`, a API usa memória apenas para desenvolvimento local; esse fallback não deve ser utilizado em produção.

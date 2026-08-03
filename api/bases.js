@@ -1,7 +1,6 @@
 import { del, list, put } from '@vercel/blob';
 
 const MODULES = ['Utilizado', 'Faturado', 'Recebido'];
-const AUTH_ENABLED = false;
 const memoryFallback = globalThis.__ufrPersistentBases ??= {};
 
 export default async function handler(request, response) {
@@ -18,29 +17,25 @@ export default async function handler(request, response) {
     } catch (error) { return response.status(500).json({ error: safeMessage(error) }); }
   }
   if (request.method === 'PATCH') {
-    if (!authorized(request)) return response.status(401).json({ error: 'Usuário sem autorização para restaurar bases.' });
     try { await restoreVersion(request.query.module, request.query.version); return response.status(200).json({ ok: true }); }
     catch (error) { return response.status(500).json({ error: safeMessage(error) }); }
   }
   if (request.method === 'DELETE') {
-    if (!authorized(request)) return response.status(401).json({ error: 'Usuário sem autorização para excluir bases.' });
     try { await deleteCurrent(request.query.module); return response.status(200).json({ ok: true }); }
     catch (error) { return response.status(500).json({ error: safeMessage(error) }); }
   }
   if (request.method !== 'POST') return response.status(405).json({ error: 'Método não permitido.' });
-  if (!authorized(request)) return response.status(401).json({ error: 'Usuário sem autorização para substituir bases.' });
   const module = request.query.module;
   if (!MODULES.includes(module)) return response.status(400).json({ error: 'Módulo inválido.' });
   try {
     const payload = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
     if (!payload || payload.module !== module || !payload.blobUrl) return response.status(400).json({ error: 'Conteúdo da base inválido.' });
-    const audit = { date: new Date().toISOString(), user: decodeURIComponent(request.headers['x-ufr-user'] ?? 'Administrador'), module, fileName: payload.report?.fileName, rows: payload.rowCount, version: payload.version, fileHash: payload.fileHash, blobUrl: payload.blobUrl };
+    const audit = { date: new Date().toISOString(), module, fileName: payload.report?.fileName, rows: payload.rowCount, version: payload.version, fileHash: payload.fileHash, blobUrl: payload.blobUrl };
     await writeVersion(module, payload, audit);
     return response.status(200).json({ ok: true, version: payload.version });
   } catch (error) { return response.status(500).json({ error: safeMessage(error) }); }
 }
 
-function authorized(request) { if (!AUTH_ENABLED) return true; const expected = process.env.UFR_ADMIN_TOKEN; return !!expected && request.headers.authorization === `Bearer ${expected}`; }
 function safeMessage(error) { return error instanceof Error ? error.message : 'Falha no armazenamento persistente.'; }
 
 async function readLatest(module) {

@@ -7,7 +7,7 @@ export interface PersistedModule {
   columns: string[];
   report: ValidationReport;
   updated: Date;
-  updatedBy: string;
+  updatedBy?: string;
   version: string;
   fileHash: string;
 }
@@ -23,15 +23,12 @@ export async function loadPersistentBases(): Promise<Partial<Record<SourceModule
   return Object.fromEntries(entries) as Partial<Record<SourceModule, PersistedModule>>;
 }
 
-export async function persistBase(input: { module: SourceModule; rows: DataRow[]; columns: string[]; report: ValidationReport; file: File; user: string; adminToken?: string }): Promise<PersistedModule> {
+export async function persistBase(input: { module: SourceModule; rows: DataRow[]; columns: string[]; report: ValidationReport; file: File }): Promise<PersistedModule> {
   const fileHash = await sha256(input.file);
   const version = `${new Date().toISOString()}-${fileHash.slice(0, 12)}`;
-  const payload: StoredPayload = { module: input.module, rows: input.rows, columns: input.columns, report: input.report, updated: new Date().toISOString(), updatedBy: input.user, version, fileHash };
-  const blob = await upload(`ufr/${input.module}/versions/${version}.json`, new Blob([JSON.stringify(payload)], { type: 'application/json' }), { access: 'public', handleUploadUrl: '/api/upload', clientPayload: JSON.stringify({ module: input.module, user: input.user, adminToken: input.adminToken }) });
-  const headers: Record<string, string> = { 'content-type': 'application/json', 'x-ufr-user': encodeURIComponent(input.user) };
-  if (input.adminToken) headers.authorization = `Bearer ${input.adminToken}`;
-  const response = await fetch(`/api/bases?module=${encodeURIComponent(input.module)}`, { method: 'POST', headers, body: JSON.stringify({ module: input.module, version, fileHash, blobUrl: blob.url, report: input.report, rowCount: input.rows.length, updated: payload.updated, updatedBy: input.user }) });
-  if (response.status === 401) throw new Error('Usuário sem autorização para substituir bases.');
+  const payload: StoredPayload = { module: input.module, rows: input.rows, columns: input.columns, report: input.report, updated: new Date().toISOString(), version, fileHash };
+  const blob = await upload(`ufr/${input.module}/versions/${version}.json`, new Blob([JSON.stringify(payload)], { type: 'application/json' }), { access: 'public', handleUploadUrl: '/api/upload', clientPayload: JSON.stringify({ module: input.module }) });
+  const response = await fetch(`/api/bases?module=${encodeURIComponent(input.module)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ module: input.module, version, fileHash, blobUrl: blob.url, report: input.report, rowCount: input.rows.length, updated: payload.updated }) });
   if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? 'Não foi possível persistir a base no armazenamento corporativo.');
   return { ...payload, updated: new Date(payload.updated) };
 }
