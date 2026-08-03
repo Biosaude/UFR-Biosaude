@@ -1,6 +1,7 @@
 import { del, list, put } from '@vercel/blob';
 
 const MODULES = ['Utilizado', 'Faturado', 'Recebido'];
+const AUTH_ENABLED = false;
 const memoryFallback = globalThis.__ufrPersistentBases ??= {};
 
 export default async function handler(request, response) {
@@ -39,7 +40,7 @@ export default async function handler(request, response) {
   } catch (error) { return response.status(500).json({ error: safeMessage(error) }); }
 }
 
-function authorized(request) { const expected = process.env.UFR_ADMIN_TOKEN; return !!expected && request.headers.authorization === `Bearer ${expected}`; }
+function authorized(request) { if (!AUTH_ENABLED) return true; const expected = process.env.UFR_ADMIN_TOKEN; return !!expected && request.headers.authorization === `Bearer ${expected}`; }
 function safeMessage(error) { return error instanceof Error ? error.message : 'Falha no armazenamento persistente.'; }
 
 async function readLatest(module) {

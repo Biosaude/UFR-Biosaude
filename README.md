@@ -52,8 +52,8 @@ O processamento e a validação ocorrem no navegador; somente após a confirmaç
 Em produção, configure no projeto Vercel:
 
 - `BLOB_READ_WRITE_TOKEN`: token de um Vercel Blob Store usado para armazenar a versão atual, versões anteriores e auditorias de cada módulo.
-- `UFR_ADMIN_TOKEN`: segredo exigido pelo endpoint de atualização, restauração e exclusão de bases.
+- `UFR_ADMIN_TOKEN`: reservado para a futura autenticação de produção. A validação está temporariamente desabilitada por `AUTH_ENABLED = false` durante o desenvolvimento.
 
-A consulta das versões atuais é pública para os usuários do dashboard. Operações de escrita exigem o token administrativo, solicitado somente durante a confirmação do upload e mantido apenas na sessão do administrador. Cada atualização grava uma versão imutável, um manifesto atual e um registro de auditoria com usuário, arquivo, módulo, quantidade de registros, hash e horário.
+A consulta das versões atuais e o fluxo de atualização estão temporariamente liberados durante o desenvolvimento, sem prompts ou tokens. Cada atualização continua gravando uma versão imutável, um manifesto atual e um registro de auditoria com arquivo, módulo, quantidade de registros, hash e horário. Antes da produção, altere `AUTH_ENABLED` e substitua esta chave por login, sessão e perfis reais.
 
 Sem `BLOB_READ_WRITE_TOKEN`, a API usa memória apenas para desenvolvimento local; esse fallback não deve ser utilizado em produção.
