@@ -6,10 +6,48 @@ export interface AuthSession {
 }
 
 const key = 'ufr-admin-session';
-const config = () => ({
-  url: import.meta.env.VITE_SUPABASE_URL as string,
-  anon: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
-});
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+
+function createClient(url: string, anonKey: string) {
+  const request = async (path: string, init: RequestInit) => {
+    const response = await fetch(`${url}${path}`, {
+      ...init,
+      headers: { apikey: anonKey, 'Content-Type': 'application/json', ...init.headers },
+    });
+    const body = await response.json().catch(() => ({}));
+    return { response, body };
+  };
+
+  return {
+    auth: {
+      async signInWithPassword(credentials: { email: string; password: string }) {
+        return request('/auth/v1/token?grant_type=password', {
+          method: 'POST',
+          body: JSON.stringify(credentials),
+        });
+      },
+      async refreshSession(refreshToken: string) {
+        return request('/auth/v1/token?grant_type=refresh_token', {
+          method: 'POST',
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+      },
+      async signOut(accessToken: string) {
+        return request('/auth/v1/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+      },
+    },
+  };
+}
+
+const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
+
+function assertConfigured() {
+  if (!supabaseUrl || !supabaseAnonKey) throw new Error('Autenticação não configurada.');
+}
 
 export const getStoredSession = () => {
   try {
@@ -26,45 +64,30 @@ const save = (data: AuthSession & { expires_in: number }): AuthSession => {
 };
 
 export async function signIn(email: string, password: string) {
-  const { url, anon } = config();
-  if (!url || !anon) throw new Error('Autenticação não configurada.');
-  const response = await fetch(`${url}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: { apikey: anon, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  const body = await response.json();
+  assertConfigured();
+  const { response, body } = await supabase.auth.signInWithPassword({ email, password });
   if (!response.ok) throw new Error('E-mail ou senha inválidos.');
   return save(body);
 }
 
 export async function validSession() {
+  assertConfigured();
   let session = getStoredSession();
   if (!session) return null;
   if (session.expires_at > Date.now() / 1000 + 60) return session;
-  const { url, anon } = config();
-  const response = await fetch(`${url}/auth/v1/token?grant_type=refresh_token`, {
-    method: 'POST',
-    headers: { apikey: anon, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: session.refresh_token }),
-  });
+  const { response, body } = await supabase.auth.refreshSession(session.refresh_token);
   if (!response.ok) {
     localStorage.removeItem(key);
     return null;
   }
-  session = save(await response.json());
+  session = save(body);
   return session;
 }
 
 export async function signOut() {
+  assertConfigured();
   const session = getStoredSession();
-  const { url, anon } = config();
-  if (session) {
-    await fetch(`${url}/auth/v1/logout`, {
-      method: 'POST',
-      headers: { apikey: anon, Authorization: `Bearer ${session.access_token}` },
-    }).catch(() => null);
-  }
+  if (session) await supabase.auth.signOut(session.access_token).catch(() => null);
   localStorage.removeItem(key);
 }
 
