@@ -1,0 +1,2 @@
+import { apiError, parseBody, requireAdmin, supabase } from '../../_lib/supabase.js';
+export default async function handler(req, res) { if (req.method !== 'POST') return res.status(405).end(); if (!await requireAdmin(req, res)) return; try { const { importId } = parseBody(req); await supabase('rpc/activate_import', { method: 'POST', body: JSON.stringify({ target_id: importId, require_ready: false }) }); return res.status(200).json({ ok: true }); } catch (e) { return apiError(res, e); } }
