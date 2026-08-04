@@ -5,12 +5,17 @@ export interface AuthSession {
   user: { id: string; email?: string };
 }
 
+type SupabaseAuthResponse = { response: Response; body: AuthSession & { expires_in: number } };
+type RuntimeAuthConfig = { configured: boolean; url?: string; anonKey?: string };
+
 const key = 'ufr-admin-session';
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+const envSupabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const envSupabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+let runtimeConfigPromise: Promise<RuntimeAuthConfig> | null = null;
+let supabaseClient: ReturnType<typeof createClient> | null = null;
 
 function createClient(url: string, anonKey: string) {
-  const request = async (path: string, init: RequestInit) => {
+  const request = async (path: string, init: RequestInit): Promise<SupabaseAuthResponse> => {
     const response = await fetch(`${url}${path}`, {
       ...init,
       headers: { apikey: anonKey, 'Content-Type': 'application/json', ...init.headers },
@@ -43,10 +48,30 @@ function createClient(url: string, anonKey: string) {
   };
 }
 
-const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
+const supabaseFromEnv = envSupabaseUrl && envSupabaseAnonKey
+  ? createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
+  : null;
 
-function assertConfigured() {
-  if (!supabaseUrl || !supabaseAnonKey) throw new Error('Autenticação não configurada.');
+async function readRuntimeConfig() {
+  if (!runtimeConfigPromise) {
+    runtimeConfigPromise = fetch('/api/auth/config', { cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : { configured: false }))
+      .catch(() => ({ configured: false }));
+  }
+  return runtimeConfigPromise;
+}
+
+async function getSupabase() {
+  if (supabaseFromEnv) return supabaseFromEnv;
+  if (supabaseClient) return supabaseClient;
+
+  const runtime = await readRuntimeConfig();
+  const url = runtime.url?.trim();
+  const anonKey = runtime.anonKey?.trim();
+  if (!runtime.configured || !url || !anonKey) throw new Error('Autenticação não configurada.');
+
+  supabaseClient = createClient(url, anonKey);
+  return supabaseClient;
 }
 
 export const getStoredSession = () => {
@@ -64,17 +89,19 @@ const save = (data: AuthSession & { expires_in: number }): AuthSession => {
 };
 
 export async function signIn(email: string, password: string) {
-  assertConfigured();
+  const supabase = await getSupabase();
   const { response, body } = await supabase.auth.signInWithPassword({ email, password });
   if (!response.ok) throw new Error('E-mail ou senha inválidos.');
   return save(body);
 }
 
 export async function validSession() {
-  assertConfigured();
   let session = getStoredSession();
   if (!session) return null;
+
+  const supabase = await getSupabase();
   if (session.expires_at > Date.now() / 1000 + 60) return session;
+
   const { response, body } = await supabase.auth.refreshSession(session.refresh_token);
   if (!response.ok) {
     localStorage.removeItem(key);
@@ -85,9 +112,14 @@ export async function validSession() {
 }
 
 export async function signOut() {
-  assertConfigured();
   const session = getStoredSession();
-  if (session) await supabase.auth.signOut(session.access_token).catch(() => null);
+  if (!session) {
+    localStorage.removeItem(key);
+    return;
+  }
+
+  const supabase = await getSupabase();
+  await supabase.auth.signOut(session.access_token).catch(() => null);
   localStorage.removeItem(key);
 }
 
