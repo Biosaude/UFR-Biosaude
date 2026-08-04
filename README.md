@@ -36,7 +36,7 @@ de um bundle que o Vite consegue compilar corretamente.
 - `/login`: autenticação persistente do administrador pelo Supabase Auth.
 - `/admin`: dashboard completo, importação em lotes, validação, publicação, histórico e restauração.
 
-Copie `.env.example` para a configuração local e configure as três variáveis também nos ambientes Development, Preview e Production da Vercel. A `SUPABASE_SERVICE_ROLE_KEY` é utilizada exclusivamente pelas funções de servidor. Execute `supabase/migrations/001_persistent_imports.sql` no projeto Supabase e associe o único usuário administrativo conforme a instrução ao fim da migration.
+Copie `.env.example` para a configuração local e configure as três variáveis também nos ambientes Development, Preview e Production da Vercel. A `VITE_SUPABASE_URL` e a `VITE_SUPABASE_ANON_KEY` alimentam o Supabase Auth no navegador; a `SUPABASE_SERVICE_ROLE_KEY` é utilizada exclusivamente pelas funções de servidor. Execute `supabase/migrations/001_persistent_imports.sql` no projeto Supabase e associe o único usuário administrativo conforme a instrução ao fim da migration.
 
 ## Fluxo da base
 
