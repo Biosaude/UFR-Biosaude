@@ -1,0 +1,78 @@
+export interface AuthSession {
+  access_token: string;
+  refresh_token: string;
+  expires_at: number;
+  user: { id: string; email?: string };
+}
+
+const key = 'ufr-admin-session';
+const config = () => ({
+  url: import.meta.env.VITE_SUPABASE_URL as string,
+  anon: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+});
+
+export const getStoredSession = () => {
+  try {
+    return JSON.parse(localStorage.getItem(key) || 'null') as AuthSession | null;
+  } catch {
+    return null;
+  }
+};
+
+const save = (data: AuthSession & { expires_in: number }): AuthSession => {
+  const session = { ...data, expires_at: Math.floor(Date.now() / 1000) + data.expires_in };
+  localStorage.setItem(key, JSON.stringify(session));
+  return session;
+};
+
+export async function signIn(email: string, password: string) {
+  const { url, anon } = config();
+  if (!url || !anon) throw new Error('Autenticação não configurada.');
+  const response = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { apikey: anon, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const body = await response.json();
+  if (!response.ok) throw new Error('E-mail ou senha inválidos.');
+  return save(body);
+}
+
+export async function validSession() {
+  let session = getStoredSession();
+  if (!session) return null;
+  if (session.expires_at > Date.now() / 1000 + 60) return session;
+  const { url, anon } = config();
+  const response = await fetch(`${url}/auth/v1/token?grant_type=refresh_token`, {
+    method: 'POST',
+    headers: { apikey: anon, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: session.refresh_token }),
+  });
+  if (!response.ok) {
+    localStorage.removeItem(key);
+    return null;
+  }
+  session = save(await response.json());
+  return session;
+}
+
+export async function signOut() {
+  const session = getStoredSession();
+  const { url, anon } = config();
+  if (session) {
+    await fetch(`${url}/auth/v1/logout`, {
+      method: 'POST',
+      headers: { apikey: anon, Authorization: `Bearer ${session.access_token}` },
+    }).catch(() => null);
+  }
+  localStorage.removeItem(key);
+}
+
+export async function adminFetch(path: string, init: RequestInit = {}) {
+  const session = await validSession();
+  if (!session) throw new Error('Sua sessão expirou. Entre novamente.');
+  return fetch(path, {
+    ...init,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}`, ...init.headers },
+  });
+}
