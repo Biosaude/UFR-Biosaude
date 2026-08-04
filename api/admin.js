@@ -1,4 +1,4 @@
-import { apiError, modules, parseBody, requireAdmin, supabase, tableFor } from './_lib/supabase.js';
+import { apiError, modules, parseBody, requireAdmin, supabase, tableFor } from '../server/supabase.js';
 
 const allowedActions = ['start', 'batch', 'validate', 'publish', 'cancel', 'restore', 'history'];
 

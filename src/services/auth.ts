@@ -54,7 +54,7 @@ const supabaseFromEnv = envSupabaseUrl && envSupabaseAnonKey
 
 async function readRuntimeConfig() {
   if (!runtimeConfigPromise) {
-    runtimeConfigPromise = fetch('/api/auth/config', { cache: 'no-store' })
+    runtimeConfigPromise = fetch('/api/auth', { cache: 'no-store' })
       .then((response) => (response.ok ? response.json() : { configured: false }))
       .catch(() => ({ configured: false }));
   }

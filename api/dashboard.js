@@ -1,4 +1,4 @@
-import { apiError, supabase, tableFor } from './_lib/supabase.js';
+import { apiError, supabase, tableFor } from '../server/supabase.js';
 
 const modules = { utilizado: 'Utilizado', faturado: 'Faturado', recebido: 'Recebido' };
 const views = ['overview', 'updates', ...Object.keys(modules)];
