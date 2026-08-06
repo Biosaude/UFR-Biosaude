@@ -3,6 +3,16 @@ import { del, list, put } from '@vercel/blob';
 const MODULES = ['Utilizado', 'Faturado', 'Recebido'];
 const memoryFallback = globalThis.__ufrPersistentBases ??= {};
 
+function blobTokenAvailable() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+}
+
+function assertBlobConfiguration() {
+  if (!blobTokenAvailable() && (process.env.BLOB_STORE_ID || process.env.BLOB_WEBHOOK_PUBLIC_KEY)) {
+    throw new Error('O Vercel Blob está vinculado, mas a credencial BLOB_READ_WRITE_TOKEN não está disponível neste deployment.');
+  }
+}
+
 export default async function handler(request, response) {
   if (request.method === 'GET') {
     try {
@@ -43,8 +53,8 @@ function authorized(request) { const expected = process.env.UFR_ADMIN_TOKEN; ret
 function safeMessage(error) { return error instanceof Error ? error.message : 'Falha no armazenamento persistente.'; }
 
 async function readLatest(module) {
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) return memoryFallback[module]?.latest ?? null;
+  assertBlobConfiguration();
+  if (!blobTokenAvailable()) return memoryFallback[module]?.latest ?? null;
   const blobs = await listBlobs(`ufr/${module}/latest.json`);
   if (!blobs.length) return null;
   const latest = await fetch(blobs[0].url, { cache: 'no-store' });
@@ -52,25 +62,25 @@ async function readLatest(module) {
 }
 
 async function writeVersion(module, payload, audit) {
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  assertBlobConfiguration();
   const reference = { blobUrl: payload.blobUrl, version: payload.version, updated: payload.updated, updatedBy: payload.updatedBy };
-  if (!token) { memoryFallback[module] = { latest: reference, versions: { ...(memoryFallback[module]?.versions ?? {}), [payload.version]: reference }, history: [...(memoryFallback[module]?.history ?? []), audit] }; return; }
+  if (!blobTokenAvailable()) { memoryFallback[module] = { latest: reference, versions: { ...(memoryFallback[module]?.versions ?? {}), [payload.version]: reference }, history: [...(memoryFallback[module]?.history ?? []), audit] }; return; }
   await putBlob(`ufr/${module}/latest.json`, reference, true);
   await putBlob(`ufr/${module}/audit/${payload.version}.json`, audit, false);
 }
 
 async function readHistory(module) {
   if (!MODULES.includes(module)) throw new Error('Módulo inválido.');
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) return memoryFallback[module]?.history ?? [];
+  assertBlobConfiguration();
+  if (!blobTokenAvailable()) return memoryFallback[module]?.history ?? [];
   const blobs = await listBlobs(`ufr/${module}/audit/`);
   return Promise.all(blobs.map(async (blob) => (await fetch(blob.url, { cache: 'no-store' })).json()));
 }
 
 async function restoreVersion(module, version) {
   if (!MODULES.includes(module) || !version) throw new Error('Versão inválida.');
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) { const versionEntry = memoryFallback[module]?.versions?.[version]; if (!versionEntry) throw new Error('Versão não encontrada.'); memoryFallback[module].latest = versionEntry; return; }
+  assertBlobConfiguration();
+  if (!blobTokenAvailable()) { const versionEntry = memoryFallback[module]?.versions?.[version]; if (!versionEntry) throw new Error('Versão não encontrada.'); memoryFallback[module].latest = versionEntry; return; }
   const blobs = await listBlobs(`ufr/${module}/versions/${version}.json`);
   if (!blobs.length) throw new Error('Versão não encontrada.');
   const reference = { blobUrl: blobs[0].url, version };
@@ -79,8 +89,8 @@ async function restoreVersion(module, version) {
 
 async function deleteCurrent(module) {
   if (!MODULES.includes(module)) throw new Error('Módulo inválido.');
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) { delete memoryFallback[module]; return; }
+  assertBlobConfiguration();
+  if (!blobTokenAvailable()) { delete memoryFallback[module]; return; }
   const blobs = await listBlobs(`ufr/${module}/latest.json`);
   if (blobs.length) await del(blobs.map((blob) => blob.url));
 }
