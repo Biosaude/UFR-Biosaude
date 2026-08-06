@@ -1,6 +1,6 @@
 # UFR — Utilizado, Faturado e Recebido
 
-Dashboard executivo para análise fiel de bases operacionais em Excel. A primeira versão ativa somente o módulo **Utilizado**; os módulos **Faturado** e **Recebido** permanecem explicitamente bloqueados até suas bases serem incluídas.
+Dashboard executivo para análise fiel de bases operacionais em Excel, com visualização pública em `/dashboard` e administração autenticada em `/admin` dentro do mesmo projeto Vercel.
 
 ## Execução
 
@@ -30,12 +30,21 @@ TypeScript permanece disponível separadamente em `npm run typecheck`, evitando
 que diferenças entre tipos de bibliotecas de visualização interrompam a entrega
 de um bundle que o Vite consegue compilar corretamente.
 
+## Rotas e persistência
+
+- `/dashboard`: consulta pública das versões publicadas, sem controles administrativos.
+- `/login`: autenticação persistente do administrador pelo Supabase Auth.
+- `/admin`: dashboard completo, importação em lotes, validação, publicação, histórico e restauração.
+
+Copie `.env.example` para a configuração local e configure as três variáveis também nos ambientes Development, Preview e Production da Vercel. A `VITE_SUPABASE_URL` e a `VITE_SUPABASE_ANON_KEY` alimentam o Supabase Auth no navegador; a `SUPABASE_SERVICE_ROLE_KEY` é utilizada exclusivamente pelas funções de servidor. Execute `supabase/migrations/001_persistent_imports.sql` no projeto Supabase e associe o único usuário administrativo conforme a instrução ao fim da migration.
+
 ## Fluxo da base
 
 1. Selecione exclusivamente um arquivo `.xlsx`.
 2. A aplicação procura a aba `Utilizado` e lê os registros sem preencher, deduplicar ou alterar células.
 3. O relatório de validação informa período, campos vazios, duplicidades, datas e valores inválidos.
-4. Os dados somente são aplicados após confirmação explícita.
+4. Os dados são enviados em lotes idempotentes para uma nova versão temporária.
+5. A versão só pode ser publicada depois da validação dos registros gravados; a versão ativa anterior é preservada em qualquer falha.
 
 Toda visualização é calculada no navegador a partir da planilha importada. Indicadores sem uma coluna de origem reconhecida exibem **“Informação não disponível na base de dados”**.
 
@@ -45,4 +54,10 @@ Toda visualização é calculada no navegador a partir da planilha importada. In
 - `src/components`: interface, visualizações, importação e estados sem dados.
 - `src/types.ts`: contratos compartilhados dos módulos e registros.
 
-O processamento, a validação e a aplicação das bases ocorrem exclusivamente no navegador. Depois da confirmação, os registros validados são mantidos apenas no estado em memória da aplicação e alimentam diretamente filtros, indicadores, gráficos, rankings e tabelas. Nenhum arquivo ou dado processado é enviado a armazenamento externo.
+O Excel é lido e validado no navegador sem alterar células. Os registros confirmados são persistidos em tabelas independentes no Supabase PostgreSQL. As APIs públicas retornam somente versões ativas e as APIs de mutação verificam no servidor tanto a sessão Supabase quanto o perfil administrativo.
+
+Para respeitar o limite do plano Hobby da Vercel, todas as operações HTTP são
+despachadas pela única função Serverless `api/index.js`. O parâmetro `scope`
+separa autenticação, administração e consulta pública; os manipuladores e o
+cliente privilegiado do Supabase permanecem fora de `api/` e não criam rotas
+Serverless adicionais.
