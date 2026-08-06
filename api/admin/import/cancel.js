@@ -1,2 +1,0 @@
-import { apiError, parseBody, requireAdmin, supabase } from '../../_lib/supabase.js';
-export default async function handler(req, res) { if (req.method !== 'POST') return res.status(405).end(); if (!await requireAdmin(req, res)) return; try { const { importId } = parseBody(req); await supabase(`importacoes?id=eq.${encodeURIComponent(importId)}&is_active=eq.false`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelado' }) }); return res.status(200).json({ ok: true }); } catch (e) { return apiError(res, e); } }
