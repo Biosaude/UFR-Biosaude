@@ -58,4 +58,4 @@ Em produção, configure no projeto Vercel:
 
 A consulta das versões atuais é pública para os usuários do dashboard. Operações de escrita exigem o token administrativo, solicitado somente durante a confirmação do upload e mantido apenas na sessão do administrador. Cada atualização grava uma versão imutável, um manifesto atual e um registro de auditoria com usuário, arquivo, módulo, quantidade de registros, hash e horário.
 
-Sem `BLOB_READ_WRITE_TOKEN`, a API usa memória apenas para desenvolvimento local; esse fallback não deve ser utilizado em produção.
+Na Vercel, `BLOB_READ_WRITE_TOKEN` é obrigatório. O fallback interno de leitura da API não implementa uploads locais completos e não deve ser considerado um modo de persistência; para testar uploads, configure um Blob Store e a credencial de escrita.

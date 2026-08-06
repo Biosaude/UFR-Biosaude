@@ -8,6 +8,7 @@
     "build": "vite build",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
+    "test:regressions": "node --test tests/review-regressions.test.mjs",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {

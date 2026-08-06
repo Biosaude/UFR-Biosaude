@@ -8,7 +8,7 @@ function blobTokenAvailable() {
 }
 
 function assertBlobConfiguration() {
-  if (!blobTokenAvailable() && (process.env.BLOB_STORE_ID || process.env.BLOB_WEBHOOK_PUBLIC_KEY)) {
+  if (!blobTokenAvailable() && (process.env.VERCEL || process.env.BLOB_STORE_ID || process.env.BLOB_WEBHOOK_PUBLIC_KEY)) {
     throw new Error('O Vercel Blob está vinculado, mas a credencial BLOB_READ_WRITE_TOKEN não está disponível neste deployment.');
   }
 }
@@ -65,8 +65,16 @@ async function writeVersion(module, payload, audit) {
   assertBlobConfiguration();
   const reference = { blobUrl: payload.blobUrl, version: payload.version, updated: payload.updated, updatedBy: payload.updatedBy };
   if (!blobTokenAvailable()) { memoryFallback[module] = { latest: reference, versions: { ...(memoryFallback[module]?.versions ?? {}), [payload.version]: reference }, history: [...(memoryFallback[module]?.history ?? []), audit] }; return; }
-  await putBlob(`ufr/${module}/latest.json`, reference, true);
-  await putBlob(`ufr/${module}/audit/${payload.version}.json`, audit, false);
+  try {
+    await putBlob(`ufr/${module}/audit/${payload.version}.json`, audit, false);
+  } catch {
+    throw new Error('Não foi possível registrar a auditoria. A versão atual foi preservada.');
+  }
+  try {
+    await putBlob(`ufr/${module}/latest.json`, reference, true);
+  } catch {
+    throw new Error('A auditoria foi registrada, mas não foi possível publicar a nova versão. A versão atual foi preservada.');
+  }
 }
 
 async function readHistory(module) {

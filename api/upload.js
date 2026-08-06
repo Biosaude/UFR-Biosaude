@@ -2,7 +2,7 @@ import { handleUpload } from '@vercel/blob/client';
 
 export default async function handler(request, response) {
   if (request.method !== 'POST') return response.status(405).json({ error: 'Método não permitido.' });
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+  if (!process.env.BLOB_READ_WRITE_TOKEN && process.env.VERCEL) {
     const storeIsLinked = Boolean(process.env.BLOB_STORE_ID || process.env.BLOB_WEBHOOK_PUBLIC_KEY);
     return response.status(503).json({
       error: storeIsLinked
