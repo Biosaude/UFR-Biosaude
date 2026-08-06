@@ -55,3 +55,9 @@ Toda visualização é calculada no navegador a partir da planilha importada. In
 - `src/types.ts`: contratos compartilhados dos módulos e registros.
 
 O Excel é lido e validado no navegador sem alterar células. Os registros confirmados são persistidos em tabelas independentes no Supabase PostgreSQL. As APIs públicas retornam somente versões ativas e as APIs de mutação verificam no servidor tanto a sessão Supabase quanto o perfil administrativo.
+
+Para respeitar o limite do plano Hobby da Vercel, todas as operações HTTP são
+despachadas pela única função Serverless `api/index.js`. O parâmetro `scope`
+separa autenticação, administração e consulta pública; os manipuladores e o
+cliente privilegiado do Supabase permanecem fora de `api/` e não criam rotas
+Serverless adicionais.
