@@ -1,13 +1,13 @@
 import { AlertTriangle, CheckCircle2, FileSpreadsheet, LoaderCircle, X } from 'lucide-react';
 import type { SourceModule, ValidationReport } from '../types';
 
-interface Props { open: boolean; targetModule: SourceModule | null; report: ValidationReport | null; loading: boolean; error: string | null; progress?: { current:number; total:number; sent:number; rows:number } | null; onClose: () => void; onSelectModule: (module: SourceModule) => void; onFile: (file: File) => void; onConfirm: () => void; }
+interface Props { open: boolean; targetModule: SourceModule | null; report: ValidationReport | null; loading: boolean; error: string | null; onClose: () => void; onSelectModule: (module: SourceModule) => void; onFile: (file: File) => void; onConfirm: () => void; }
 
-export function UploadModal({ open, targetModule, report, loading, error, progress, onClose, onSelectModule, onFile, onConfirm }: Props) {
+export function UploadModal({ open, targetModule, report, loading, error, onClose, onSelectModule, onFile, onConfirm }: Props) {
   if (!open) return null;
   return <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal">
-    <div className="modal-header"><div><p className="eyebrow">ATUALIZAÇÃO SEGURA</p><h2>Atualizar base de dados</h2></div><button className="icon-button" onClick={onClose} aria-label="Fechar"><X/></button></div>
-    {!targetModule && <div className="module-picker"><p>Qual base deseja atualizar?</p><div><button onClick={() => onSelectModule('Utilizado')}><FileSpreadsheet/><strong>Utilizado</strong><span>Disponível para atualização</span></button><button onClick={() => onSelectModule('Faturado')}><FileSpreadsheet/><strong>Faturado</strong><span>Primeira importação ou atualização</span></button><button onClick={() => onSelectModule('Recebido')}><FileSpreadsheet/><strong>Recebido</strong><span>Primeira importação ou atualização</span></button></div></div>}
+    <div className="modal-header"><div><p className="eyebrow">ATUALIZAÇÃO SEGURA</p><h2>Atualizar base de dados</h2></div><button className="icon-button" disabled={loading} onClick={onClose} aria-label="Fechar"><X/></button></div>
+    {!targetModule && <div className="module-picker"><p>Qual base deseja atualizar?</p><div><button disabled={loading} onClick={() => onSelectModule('Utilizado')}><FileSpreadsheet/><strong>Utilizado</strong><span>Disponível para atualização</span></button><button disabled={loading} onClick={() => onSelectModule('Faturado')}><FileSpreadsheet/><strong>Faturado</strong><span>Primeira importação ou atualização</span></button><button disabled={loading} onClick={() => onSelectModule('Recebido')}><FileSpreadsheet/><strong>Recebido</strong><span>Primeira importação ou atualização</span></button></div></div>}
     {targetModule && !report && <label className="drop-zone">
       {loading ? <><LoaderCircle className="spin"/><strong>Validando arquivo…</strong></> : <><FileSpreadsheet/><strong>Selecione a planilha .xlsx</strong><span>A base só será aplicada após sua confirmação.</span></>}
       <input type="file" accept=".xlsx" disabled={loading} onChange={(event) => { const file = event.target.files?.[0]; if (file) onFile(file); event.target.value = ''; }}/>
@@ -45,8 +45,7 @@ export function UploadModal({ open, targetModule, report, loading, error, progre
       </div>
       <div className="notice"><AlertTriangle/> Duplicidades e campos vazios são apenas sinalizados. Nenhum registro será alterado ou removido.</div>
       {!!report.errors.length && <div className="error-box"><AlertTriangle/><div><strong>A aba encontrada não contém todas as colunas obrigatórias.</strong>{report.errors.map((message) => <span key={message}>{message}</span>)}<span>A base existente foi preservada; nenhuma alteração foi realizada.</span></div></div>}
-      {progress && <div className="batch-progress"><div><span>Processando lote {progress.current} de {progress.total}</span><strong>{progress.sent.toLocaleString('pt-BR')} de {progress.rows.toLocaleString('pt-BR')} registros enviados</strong></div><progress max={progress.total} value={progress.current}/></div>}
-      <div className="modal-actions"><button className="secondary-button" disabled={loading} onClick={onClose}>Cancelar</button><button className="primary-button" disabled={loading || !!report.errors.length} onClick={onConfirm}>{loading ? 'Processando…' : 'Confirmar atualização'}</button></div>
+      <div className="modal-actions"><button className="secondary-button" disabled={loading} onClick={onClose}>Cancelar</button><button className="primary-button" disabled={loading || !!report.errors.length} onClick={onConfirm}>{loading && <LoaderCircle className="spin"/>}{loading ? 'Processando…' : 'Confirmar atualização'}</button></div>
     </>}
   </div></div>;
 }

@@ -1,6 +1,6 @@
 # UFR — Utilizado, Faturado e Recebido
 
-Dashboard executivo para análise fiel de bases operacionais em Excel, com visualização pública em `/dashboard` e administração autenticada em `/admin` dentro do mesmo projeto Vercel.
+Dashboard executivo para análise fiel de bases operacionais em Excel. A primeira versão ativa somente o módulo **Utilizado**; os módulos **Faturado** e **Recebido** permanecem explicitamente bloqueados até suas bases serem incluídas.
 
 ## Execução
 
@@ -18,9 +18,9 @@ npm run build
 
 ## Implantação na Vercel
 
-O repositório inclui `vercel.json` com o framework Vite e o diretório de saída
-`dist`. As dependências possuem versões fixas para que GitHub, Codex e Vercel
-instalem exatamente a mesma combinação.
+O repositório inclui `vercel.json` com o framework Vite, o diretório de saída
+`dist` e fallback de rotas para `index.html`. As dependências possuem versões
+fixas para que GitHub, Codex e Vercel instalem exatamente a mesma combinação.
 
 Na Vercel, mantenha o **Root Directory** na raiz do repositório e utilize a
 versão **20.x ou 22.x** do Node.js. O comando de implantação é `npm run build`.
@@ -30,21 +30,12 @@ TypeScript permanece disponível separadamente em `npm run typecheck`, evitando
 que diferenças entre tipos de bibliotecas de visualização interrompam a entrega
 de um bundle que o Vite consegue compilar corretamente.
 
-## Rotas e persistência
-
-- `/dashboard`: consulta pública das versões publicadas, sem controles administrativos.
-- `/login`: autenticação persistente do administrador pelo Supabase Auth.
-- `/admin`: dashboard completo, importação em lotes, validação, publicação, histórico e restauração.
-
-Copie `.env.example` para a configuração local e configure `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` e `SUPABASE_SECRET_KEY` também nos ambientes Development, Preview e Production da Vercel. A chave publicável alimenta o Supabase Auth; a chave secreta é utilizada exclusivamente no servidor e nunca é devolvida ao navegador. As variáveis legadas `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY` permanecem aceitas temporariamente. Execute `supabase/migrations/001_persistent_imports.sql` no projeto Supabase e associe o único usuário administrativo conforme a instrução ao fim da migration.
-
 ## Fluxo da base
 
 1. Selecione exclusivamente um arquivo `.xlsx`.
 2. A aplicação procura a aba `Utilizado` e lê os registros sem preencher, deduplicar ou alterar células.
 3. O relatório de validação informa período, campos vazios, duplicidades, datas e valores inválidos.
-4. Os dados são enviados em lotes idempotentes para uma nova versão temporária.
-5. A versão só pode ser publicada depois da validação dos registros gravados; a versão ativa anterior é preservada em qualquer falha.
+4. Os dados somente são aplicados após confirmação explícita.
 
 Toda visualização é calculada no navegador a partir da planilha importada. Indicadores sem uma coluna de origem reconhecida exibem **“Informação não disponível na base de dados”**.
 
@@ -54,10 +45,17 @@ Toda visualização é calculada no navegador a partir da planilha importada. In
 - `src/components`: interface, visualizações, importação e estados sem dados.
 - `src/types.ts`: contratos compartilhados dos módulos e registros.
 
-O Excel é lido e validado no navegador sem alterar células. Os registros confirmados são persistidos em tabelas independentes no Supabase PostgreSQL. As APIs públicas retornam somente versões ativas e as APIs de mutação verificam no servidor tanto a sessão Supabase quanto o perfil administrativo.
+O processamento e a validação ocorrem no navegador; somente após a confirmação administrativa a versão validada é enviada ao armazenamento corporativo configurado.
 
-Para respeitar o limite do plano Hobby da Vercel, todas as operações HTTP são
-despachadas pela única função Serverless `api/index.js`. O parâmetro `scope`
-separa autenticação, administração e consulta pública; os manipuladores e o
-cliente privilegiado do Supabase permanecem fora de `api/` e não criam rotas
-Serverless adicionais.
+## Persistência corporativa
+
+Em produção, configure no projeto Vercel:
+
+- `BLOB_READ_WRITE_TOKEN`: token de um Vercel Blob Store usado para armazenar a versão atual, versões anteriores e auditorias de cada módulo.
+- `UFR_ADMIN_TOKEN`: segredo exigido pelo endpoint de atualização, restauração e exclusão de bases.
+
+`BLOB_STORE_ID` e `BLOB_WEBHOOK_PUBLIC_KEY`, criadas ao vincular algumas integrações do Blob, identificam o store e validam webhooks, respectivamente. Elas não são credenciais de escrita e não substituem `BLOB_READ_WRITE_TOKEN`, que precisa estar disponível no mesmo ambiente do deployment (Production, Preview ou Development).
+
+A consulta das versões atuais é pública para os usuários do dashboard. Operações de escrita exigem o token administrativo, solicitado somente durante a confirmação do upload e mantido apenas na sessão do administrador. Cada atualização grava uma versão imutável, um manifesto atual e um registro de auditoria com usuário, arquivo, módulo, quantidade de registros, hash e horário.
+
+Na Vercel, `BLOB_READ_WRITE_TOKEN` é obrigatório. O fallback interno de leitura da API não implementa uploads locais completos e não deve ser considerado um modo de persistência; para testar uploads, configure um Blob Store e a credencial de escrita.
