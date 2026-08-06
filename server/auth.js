@@ -1,8 +1,10 @@
+import { publishableKey, supabaseUrl } from './supabase.js';
+
 export default function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Método não permitido.' });
 
-  const url = process.env.VITE_SUPABASE_URL?.trim();
-  const anonKey = process.env.VITE_SUPABASE_ANON_KEY?.trim();
+  const url = supabaseUrl()?.trim();
+  const anonKey = publishableKey()?.trim();
 
   if (!url || !anonKey) return res.status(200).json({ configured: false });
 

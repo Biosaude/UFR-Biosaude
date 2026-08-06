@@ -1,9 +1,9 @@
-const supabaseUrl = () => process.env.VITE_SUPABASE_URL;
-const anonKey = () => process.env.VITE_SUPABASE_ANON_KEY;
-const serviceKey = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
+export const supabaseUrl = () => process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+export const publishableKey = () => process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const secretKey = () => process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export function configured() {
-  return Boolean(supabaseUrl() && anonKey() && serviceKey());
+  return Boolean(supabaseUrl() && publishableKey() && secretKey());
 }
 
 export async function supabase(path, options = {}) {
@@ -11,8 +11,8 @@ export async function supabase(path, options = {}) {
   const response = await fetch(`${supabaseUrl()}/rest/v1/${path}`, {
     ...options,
     headers: {
-      apikey: serviceKey(),
-      Authorization: `Bearer ${serviceKey()}`,
+      apikey: secretKey(),
+      Authorization: `Bearer ${secretKey()}`,
       'Content-Type': 'application/json',
       ...options.headers,
     },
@@ -31,7 +31,7 @@ export async function requireAdmin(request, response) {
   }
   const token = bearer.slice(7);
   const auth = await fetch(`${supabaseUrl()}/auth/v1/user`, {
-    headers: { apikey: anonKey(), Authorization: `Bearer ${token}` },
+    headers: { apikey: publishableKey(), Authorization: `Bearer ${token}` },
   });
   if (!auth.ok) {
     response.status(401).json({ error: 'Unauthorized' });
